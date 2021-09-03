@@ -1,0 +1,6 @@
+gal,method,dist_kpc,R25_arcsec,metal0,emetal0,slope,eslope,ref
+IC342,r25,0,592.8,8.78,0.04,0.9,0.07,Kreckel K. in prep. PG16 S-calibration
+M31,r25,0,5700,8.72,0.18,0.56,0.28,ZB12
+M33,kpc,840,0,8.5,0.02,0.045,0.006,Bresolin+11
+M101,r25,0,864,8.78,0.04,0.9,0.07,Berg+20 (CHAOS IV)
+NGC628,r25,0,315,8.71,0.06,0.4,0.11,Berg+20 (CHAOS IV)
