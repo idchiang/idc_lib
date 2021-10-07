@@ -12,7 +12,7 @@ import numpy as np
 def pred_logoh_at_re(log_mstar,
                      radius_re=None,
                      p0=8.647, p1=-0.718, p2=0.682, p3=-0.133,
-                     offset=0.45, blank_re=False, blank_mstar=False):
+                     offset=0.46, blank_re=False, blank_mstar=False):
     """
     Predicting 12+log(O/H) from stellar mass and galacto-centric radius in
     effective radius, using the method described in Sun et al. (2020) and
@@ -23,8 +23,10 @@ def pred_logoh_at_re(log_mstar,
     PG16 S-calibration data measured in DustPedia and PHANGS-MUSE.
 
     Known limits:
-        1) log_mstar > 11.0 is not recommended
+        1) log_mstar > 11.0 and log_mstar < 9.0 are not recommended
         2) radius_re > 2.0 and radius_re < 0.3 are not recommended.
+
+    2021.10.07 update: offset 0.45 --> 0.46
 
     Parameters
     ----------
@@ -64,9 +66,6 @@ def pred_logoh_at_re(log_mstar,
     if radius_re is None:
         radius_re = 1.0
     log_mstar = np.array(log_mstar)
-    if np.any(log_mstar > 11.0):
-        warnings.warn('12+log(O/H) Prediction: log(mstar) > 11.0 found. ' +
-                      'This is not suggested by our extrapolation method.')
     if np.any(log_mstar > 11.0):
         warnings.warn('12+log(O/H) Prediction: log(mstar) > 11.0 found. ' +
                       'This is not suggested by our extrapolation method.')

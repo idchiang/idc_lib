@@ -232,6 +232,8 @@ def physical2angular_resolution(resolution_str='', dist_mpc=0.0):
     else:
         raise ValueError("Invalid expression in resolution_str " +
                          resolution_str + ': unit not implemented.')
+    if s[0] == '0':
+        beamsize_arcsec /= 10
     return round(beamsize_arcsec, 1)
 
 
@@ -252,6 +254,8 @@ def str2resolution(resolution_str='', dist_mpc=0.0,
         else:
             raise ValueError("Invalid expression in resolution_str " +
                              resolution_str + ': unit not implemented.')
+        if s[0] == '0':
+            beamsize_arcsec /= 10
     elif s[:5] == 'gauss':
         beamsize_arcsec = float(s[5:])
     else:
