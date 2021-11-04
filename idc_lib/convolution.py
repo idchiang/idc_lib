@@ -332,3 +332,22 @@ def reproject_wrapper(data, hdr_in, hdr_out, threshold=0.9):
     elif bitpix == 16:
         rdata = rdata.astype(np.float16)
     return rdata
+
+
+def remove_axis(hdr, target_axis):
+    naxis_in = hdr['NAXIS']
+    hdr['NAXIS'] -= 1
+    #
+    target_axis_str = str(target_axis)
+    for key in hdr.copy():
+        if target_axis_str in key:
+            hdr.remove(key)
+    #
+    for next_axis in range(target_axis + 1, naxis_in + 1):
+        next_axis_str = str(next_axis)
+        next_axis_m1_str = str(next_axis - 1)
+        for key in hdr.copy():
+            if next_axis_str in key:
+                hdr[key] = hdr[key].replace(next_axis_str, next_axis_m1_str)
+    #
+    return hdr
