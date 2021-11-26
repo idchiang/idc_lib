@@ -73,7 +73,7 @@ def conv_repr_wrapper(data_list, kernel_list, hdr_in, hdr_out,
     nan2zero : TYPE, optional
         DESCRIPTION. The default is False.
     threshold : TYPE, optional
-        DESCRIPTION. The default is 0.9.
+        0~1. The larger the more strict. The default is 0.9.
     skip_convolution : TYPE, optional
         DESCRIPTION. The default is False.
     skip_reproject : TYPE, optional
