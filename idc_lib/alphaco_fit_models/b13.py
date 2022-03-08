@@ -5,6 +5,7 @@ Created on Thu Apr 29 12:46:15 2021
 
 @author: idchiang
 """
+import warnings
 import numpy as np
 from idc_lib.phys.metallicity import metal2Z
 
@@ -44,10 +45,12 @@ class B13Exponential():
                 break
             SigmaH2_temp = ICO * aco
             #
-            diff = np.abs(aco - aco_prev) / \
-                np.nanmax(np.array([aco, aco_prev]), axis=0)
-            if np.nanmax(diff) <= 0.01:
-                break
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                diff = np.abs(aco - aco_prev) / \
+                    np.nanmax(np.array([aco, aco_prev]), axis=0)
+                if np.nanmax(diff) <= 0.01:
+                    break
             aco_prev = aco
         if i == max_loop - 1:
             mask = diff > 0.01
@@ -90,10 +93,12 @@ class B13All():
                 break
             SigmaH2_temp = ICO * aco
             #
-            diff = np.abs(aco - aco_prev) / \
-                np.nanmax(np.array([aco, aco_prev]), axis=0)
-            if np.nanmax(diff) <= 0.01:
-                break
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                diff = np.abs(aco - aco_prev) / \
+                    np.nanmax(np.array([aco, aco_prev]), axis=0)
+                if np.nanmax(diff) <= 0.01:
+                    break
             aco_prev = aco
         if i == max_loop - 1:
             mask = diff > 0.01
