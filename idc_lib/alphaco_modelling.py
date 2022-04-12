@@ -57,7 +57,8 @@ def helper(func='metal_power'):
     input('## Seems correct? Press any key to continue...')
 
 
-def mp_wrapper(func, param, SigmaHI, ICO, metal, SigmaMstar, SigmaDust, metal_z, r25_mpc, const_metal, pixel_by_pixel):
+def mp_wrapper(func, param, SigmaHI, ICO, metal, SigmaMstar, SigmaDust, metal_z, one_over_rg,
+               r25_mpc, const_metal, pixel_by_pixel):
     """
     return: (corr_metal, corr_pde, max_dm, med_dm)
     """
@@ -65,7 +66,7 @@ def mp_wrapper(func, param, SigmaHI, ICO, metal, SigmaMstar, SigmaDust, metal_z,
     alphaCO = model.aco_generator(
         params=param,
         SigmaHI=SigmaHI, ICO=ICO, metal=metal, SigmaMstar=SigmaMstar)
-    mask = np.isfinite(alphaCO)
+    mask = np.isfinite(alphaCO + one_over_rg)
     if np.sum(mask) < 2:
         return (-1.0, -1.0, 10, 10)
     else:
@@ -78,18 +79,18 @@ def mp_wrapper(func, param, SigmaHI, ICO, metal, SigmaMstar, SigmaDust, metal_z,
         else:
             if pixel_by_pixel:
                 corr_metal = w_pearsonr(
-                    logDM[mask], metal[mask], SigmaGas[mask])
+                    logDM[mask], metal[mask], one_over_rg[mask])
             else:
                 corr_metal = pearsonr(logDM[mask], metal[mask])[0]
         # PDE
         if pixel_by_pixel:
-            corr_pde = w_pearsonr(logDM[mask], logPDE[mask], SigmaGas[mask])
+            corr_pde = w_pearsonr(logDM[mask], logPDE[mask], one_over_rg[mask])
         else:
             corr_pde = pearsonr(logDM[mask], logPDE[mask])[0]
         return (corr_metal, corr_pde, 10**np.nanmax(logDM), 10**np.nanmedian(logDM))
 
 
-def fitter(SigmaDust, SigmaHI, ICO, metal, SigmaMstar,
+def fitter(SigmaDust, SigmaHI, ICO, metal, SigmaMstar, one_over_rg,
            r25_mpc,
            func='metal_power', params=np.zeros((0, 2)),
            pixel_by_pixel=True):
@@ -151,6 +152,7 @@ def fitter(SigmaDust, SigmaHI, ICO, metal, SigmaMstar,
           SigmaMstar,
           SigmaDust,
           metal_z,
+          one_over_rg,
           r25_mpc,
           const_metal,
           pixel_by_pixel) for idx in range(m)]
@@ -167,14 +169,14 @@ def plotter(params, pspace_shape, param_1ds,
     titles = [r'$\tilde{\rho}_{\rm D/M,~12+log(O/H)}$',
               r'$\tilde{\rho}_{\rm D/M,~P_{DE}}$',
               r'$\rm \tilde{max}(D/M)$',
-              r'$ln<exp(S_i)>$']
+              r'$\rm \tilde{C}^{j}$']
     cmaps = ['bwr_r', 'bwr_r', 'bwr', 'bwr_r']
     vmaxs = [None] * 4
     vmins = [None] * 4
     if mode == 0:
         # plot one galaxy
-        vmaxs = [1.0, 1.0, 2.0, 1.0]
-        vmins = [-1.0, -1.0, 0.0, -1.0]
+        vmaxs = [1.0, 1.0, 2.0, 0.0]
+        vmins = [-1.0, -1.0, 0.0, -10.0]
     elif mode == 1:
         # plot all galaxies: score
         cmaps = ['Greys'] * 4
@@ -186,17 +188,22 @@ def plotter(params, pspace_shape, param_1ds,
     elif mode == 2:
         # test coordinates
         if aco_func == 'metal_power':
-            titles = ['a (normalization)', 'b (slope)']
-        elif aco_func == 'b13':
-            titles = ['a (exponential factor)',
-                      r'$\gamma$ (high-density correction)']
+            titles = ['p0 (log normalization)', 'p1 (slope)']
+        # elif aco_func == 'b13':
+        #     titles = ['a (exponential factor)',
+        #               r'$\gamma$ (high-density correction)']
         elif aco_func == 'b13_3param':
-            titles = ['a (exponential factor)',
-                      r'$\gamma$ (high-density correction)',
-                      'b (log normalization)']
+            titles = ['q0 (log normalization)',
+                      'q1 (exponential factor)',
+                      r'$\gamma$ (high-density correction)'
+                      ]
+        elif aco_func == 'b13_no_gamma':
+            titles = ['q0 (log normalization)',
+                      'q1 (exponential factor)'
+                      ]
         elif aco_func in {'double_power_law', 'double_power_law_no_cut'}:
-            titles = ['a (normalization factor)',
-                      'b (slope)',
+            titles = ['p0 (log normalization)',
+                      'p1 (slope)',
                       r'$\gamma$ (high-density correction)']
     elif mode == 3:
         # high-score points
@@ -213,42 +220,54 @@ def plotter(params, pspace_shape, param_1ds,
         cmaps = ['Greys'] * 4
     #
     if aco_func == 'metal_power':
-        xtick_vals = [np.log10(0.25 * 4.35), np.log10(0.5 * 4.35),
-                      np.log10(4.35), np.log10(2 * 4.35),
-                      np.log10(4 * 4.35)]
-        xticks = np.interp(xtick_vals, param_1ds[0],
+        xticklabels = [0.2, 0.6, 1.0]
+        xticks = np.interp(xticklabels, param_1ds[0],
                            np.arange(len(param_1ds[0])))
-        xticklabels = [r'$\alpha_{CO}^{MW}/4$',
-                       r'$\alpha_{CO}^{MW}/2$',
-                       r'$\alpha_{CO}^{MW}$',
-                       r'$2\alpha_{CO}^{MW}$',
-                       r'$4\alpha_{CO}^{MW}$']
         yticklabels = [-4.0, -2.0, 0.0]
         yticks = np.interp(yticklabels, param_1ds[1],
                            np.arange(len(param_1ds[1])))
-        xlabel = 'a'  # (normalization)'
-        ylabel = 'b'  # (slope)'
-        qlabel = {0: 'a', 1: 'b'}
+        xlabel = 'p0'  # (normalization)'
+        ylabel = 'p1'  # (slope)'
+        qlabel = {0: 'p0', 1: 'p1'}
         qticks = {0: xticks, 1: yticks}
         qticklabels = {0: xticklabels, 1: yticklabels}
-    elif aco_func == 'b13':
-        xtick_vals = [-0.2, 0.1, 0.4, 0.7, 1.0]
-        xticks = np.interp(xtick_vals, param_1ds[0],
-                           np.arange(len(param_1ds[0])))
-        xticklabels = xtick_vals
-        yticklabels = [0.0, 0.5, 1.0]
-        yticks = np.interp(yticklabels, param_1ds[1],
-                           np.arange(len(param_1ds[1])))
-        xlabel = 'a'  # (exponential factor)'
-        ylabel = r'$\gamma$'  # (high-density correction)'
-        qlabel = {0: 'a', 1: r'$\gamma$'}
-        qticks = {0: xticks, 1: yticks}
-        qticklabels = {0: xticklabels, 1: yticklabels}
+    # elif aco_func == 'b13':
+    #     xtick_vals = [-0.2, 0.1, 0.4, 0.7, 1.0]
+    #     xticks = np.interp(xtick_vals, param_1ds[0],
+    #                        np.arange(len(param_1ds[0])))
+    #     xticklabels = xtick_vals
+    #     yticklabels = [0.0, 0.5, 1.0]
+    #     yticks = np.interp(yticklabels, param_1ds[1],
+    #                        np.arange(len(param_1ds[1])))
+    #     xlabel = 'a'  # (exponential factor)'
+    #     ylabel = r'$\gamma$'  # (high-density correction)'
+    #     qlabel = {0: 'a', 1: r'$\gamma$'}
+    #     qticks = {0: xticks, 1: yticks}
+    #     qticklabels = {0: xticklabels, 1: yticklabels}
+    elif aco_func == 'b13_no_gamma':
+        qtick_vals = {
+            0: [np.log10(2.9 / 4), np.log10(2.9), np.log10(2.9 * 4)],
+            1: [-1.0, -0.5, 0.0, 0.5, 1.0]}
+        qticks = {}
+        qticklabels = {}
+        for i in range(2):
+            qticks[i] = np.interp(qtick_vals[i], param_1ds[i],
+                                  np.arange(len(param_1ds[i])))
+            qticklabels[i] = [str(round(num, 1)) for num in qtick_vals[i]]
+        qlabel = {
+            0: 'q0',  # (log-scale normalization)'}
+            1: 'q1'}  # (exponential factor)',
+        xticklabels = qticklabels[0]
+        xticks = qticks[0]
+        yticklabels = qticklabels[1]
+        yticks = qticks[1]
+        xlabel = qlabel[0]
+        ylabel = qlabel[1]
     elif aco_func == 'b13_3param':
         qtick_vals = {
-            0: [-1.0, -0.5, 0.0, 0.5, 1.0],
-            1: [0.0, 0.5, 1.0],
-            2: [np.log10(2.9 / 4), np.log10(2.9), np.log10(2.9 * 4)]}
+            0: [np.log10(2.9 / 4), np.log10(2.9), np.log10(2.9 * 4)],
+            1: [-1.0, -0.5, 0.0, 0.5, 1.0],
+            2: [0.0, 0.5, 1.0]}
         qticks = {}
         qticklabels = {}
         for i in range(3):
@@ -256,17 +275,15 @@ def plotter(params, pspace_shape, param_1ds,
                                   np.arange(len(param_1ds[i])))
             qticklabels[i] = [str(round(num, 1)) for num in qtick_vals[i]]
         qlabel = {
-            0: 'a',  # (exponential factor)',
-            1: r'$\gamma$',  # (high-density correction)',
-            2: 'b'}  # (log-scale normalization)'}
+            0: 'q0',  # (log-scale normalization)'}
+            1: 'q1',  # (exponential factor)',
+            2: r'$\gamma$'}  # (high-density correction)',
         combs = [[1, 0], [2, 0], [2, 1]]
         # shape: (p00, p01, p02)
         sum_axis = [2, 1, 0]
     elif aco_func in {'double_power_law', 'double_power_law_no_cut'}:
         qtick_vals = {
-            0: [np.log10(0.25 * 4.35), np.log10(0.5 * 4.35),
-                np.log10(4.35), np.log10(2 * 4.35),
-                np.log10(4 * 4.35)],
+            0: [0.2, 0.6, 1.0],
             1: [-4.0, -2.0, 0.0],
             2: [0.0, 0.5, 1.0]}
         qticks = {}
@@ -276,8 +293,8 @@ def plotter(params, pspace_shape, param_1ds,
                                   np.arange(len(param_1ds[i])))
             qticklabels[i] = [str(round(num, 1)) for num in qtick_vals[i]]
         qlabel = {
-            0: 'a',  # (normalization)',
-            1: 'b',  # (slope)',
+            0: 'p0',  # (normalization)',
+            1: 'p1',  # (slope)',
             2: r'$\gamma$'}  # (high-density correction)'}
         combs = [[1, 0], [2, 0], [2, 1]]
         # shape: (p00, p01, p02)
@@ -331,22 +348,22 @@ def plotter(params, pspace_shape, param_1ds,
                     ax[i, j].set_yticklabels(qticklabels[i], size=9)
                     ax[i, j].set_ylabel(qlabel[i], size=10)
     else:
-        if aco_func in {'metal_power', 'b13'}:
+        if aco_func in {'metal_power', 'b13', 'b13_no_gamma'}:
             for i in range(len(ax)):
                 im = ax[i].contourf(images1d[i].reshape(pspace_shape).T,
                                     origin='lower',
                                     cmap=cmaps[i], vmin=vmins[i], vmax=vmaxs[i])
                 plt.colorbar(im, ax=ax[i])
                 # xlim = ax[i].get_xlim()
-                ax[i].set_xlabel(xlabel, size=10)
+                ax[i].set_xlabel(xlabel, size=12)
                 ax[i].set_xticks(xticks)
                 # ax[i].set_xticklabels([round(num, 2) for num in xticklabels])
-                ax[i].set_xticklabels(xticklabels, size=9)
+                ax[i].set_xticklabels(xticklabels, size=10)
                 ax[i].set_yticks(yticks)
-                ax[i].set_yticklabels([round(num, 1)
-                                       for num in yticklabels], size=9)
+                ax[i].set_yticklabels([round(float(num), 1)
+                                       for num in yticklabels], size=10)
                 ax[i].set_title(titles[i], size=16)
-            ax[0].set_ylabel(ylabel, size=10)
+            ax[0].set_ylabel(ylabel, size=12)
         else:
             for j in range(min(3, ax.shape[0])):
                 x, y = combs[j]
@@ -388,11 +405,11 @@ def plotter(params, pspace_shape, param_1ds,
                         plt.colorbar(im,
                                      cax=ax[0, i],
                                      orientation='horizontal')
-                    ax[j + 1, i].set_xlabel(qlabel[x], size=10)
+                    ax[j + 1, i].set_xlabel(qlabel[x], size=12)
                     ax[j + 1, i].set_xticks(qticks[x])
-                    ax[j + 1, i].set_xticklabels(qticklabels[x], size=9)
+                    ax[j + 1, i].set_xticklabels(qticklabels[x], size=10)
                     ax[j + 1, i].set_yticks(qticks[y])
-                    ax[j + 1, i].set_yticklabels(qticklabels[y], size=9)
+                    ax[j + 1, i].set_yticklabels(qticklabels[y], size=10)
                     if j == 0:
                         ax[j, i].set_title(titles[i], size=16)
-                ax[j + 1, 0].set_ylabel(qlabel[y], size=10)
+                ax[j + 1, 0].set_ylabel(qlabel[y], size=12)

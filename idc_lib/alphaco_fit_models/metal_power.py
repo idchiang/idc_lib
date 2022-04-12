@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 
 max_loop = 100
-max_aco = 1000
+max_aco = 10000
 
 
 class PowerLawMetallicity():
@@ -51,14 +51,14 @@ class DoublePowerLawMetallicity():
     def aco_generator(self, params,
                       SigmaHI=None, ICO=None, metal=None, SigmaMstar=None):
         # 10**(p0 + p1 * (metal - 8.69)) * (SigmaTotal100)**(-gamma)
-        p0, p1, p2 = params
+        p0, p1, gamma = params
         aco_prev = 10**(p0 + p1 * (metal - 8.69))
         SigmaH2_temp = ICO * aco_prev
         SigmaAtomStar = SigmaHI * 1.36 + SigmaMstar
         for i in range(max_loop):
             SigmaTot100 = (SigmaAtomStar + SigmaH2_temp) / 100.0
             aco = 10**(p0 + p1 * (metal - 8.69))
-            aco[SigmaTot100 > 1] *= SigmaTot100[SigmaTot100 > 1]**(-p2)
+            aco[SigmaTot100 > 1] *= SigmaTot100[SigmaTot100 > 1]**(-gamma)
             aco[aco > max_aco] = np.nan
             if np.sum(np.isnan(aco)) == len(aco):
                 break
@@ -96,13 +96,13 @@ class DoublePowerLawMetallicityNoCut():
     def aco_generator(self, params,
                       SigmaHI=None, ICO=None, metal=None, SigmaMstar=None):
         # 10**(p0 + p1 * (metal - 8.69)) * (SigmaTotal100)**(-gamma)
-        p0, p1, p2 = params
+        p0, p1, gamma = params
         aco_prev = 10**(p0 + p1 * (metal - 8.69))
         SigmaH2_temp = ICO * aco_prev
         SigmaAtomStar = SigmaHI * 1.36 + SigmaMstar
         for i in range(max_loop):
             SigmaTot100 = (SigmaAtomStar + SigmaH2_temp) / 100.0
-            aco = 10**(p0 + p1 * (metal - 8.69)) * SigmaTot100**(-p2)
+            aco = 10**(p0 + p1 * (metal - 8.69)) * SigmaTot100**(-gamma)
             aco[aco > max_aco] = np.nan
             if np.sum(np.isnan(aco)) == len(aco):
                 break
