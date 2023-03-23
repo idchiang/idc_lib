@@ -54,8 +54,9 @@ class B13Exponential():
             aco_prev = aco
         if i == max_loop - 1:
             mask = diff > 0.01
-            print('WARNING: B13 LOOP LIMIT REACHED IN', params,
-                  ICO[mask], SigmaAtomStar[mask], metal[mask])
+            # print('WARNING: B13 LOOP LIMIT REACHED IN', params,
+            #       ICO[mask], SigmaAtomStar[mask], metal[mask])
+            aco[mask] = np.nan
         return aco
 
 
@@ -102,8 +103,9 @@ class B13All():
             aco_prev = aco
         if i == max_loop - 1:
             mask = diff > 0.01
-            print('WARNING: B13 LOOP LIMIT REACHED IN', params,
-                  ICO[mask], SigmaAtomStar[mask], metal[mask])
+            # print('WARNING: B13 LOOP LIMIT REACHED IN', params,
+            #       ICO[mask], SigmaAtomStar[mask], metal[mask])
+            aco[mask] = np.nan
         return aco
 
 

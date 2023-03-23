@@ -10,7 +10,7 @@ import warnings
 import numpy as np
 from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
-# from matplotlib.colors import LogNorm
+import matplotlib as mpl
 from idc_lib.phys.midplane_pressure import P_DE
 from idc_lib.phys.metallicity import metal2Z
 from idc_lib.alphaco_fit_models import dict_models
@@ -57,7 +57,7 @@ def helper(func='metal_power'):
     input('## Seems correct? Press any key to continue...')
 
 
-def mp_wrapper(func, param, SigmaHI, ICO, metal, SigmaMstar, SigmaDust, metal_z, one_over_rg,
+def mp_wrapper(func, param, SigmaHI, ICO, metal, SigmaMstar, SigmaDust, metal_z, one_over_rg, rg,
                r25_mpc, const_metal, pixel_by_pixel):
     """
     return: (corr_metal, corr_pde, max_dm, med_dm)
@@ -67,11 +67,12 @@ def mp_wrapper(func, param, SigmaHI, ICO, metal, SigmaMstar, SigmaDust, metal_z,
         params=param,
         SigmaHI=SigmaHI, ICO=ICO, metal=metal, SigmaMstar=SigmaMstar)
     mask = np.isfinite(alphaCO + one_over_rg)
-    if np.sum(mask) < 2:
-        return (-1.0, -1.0, 10, 10)
+    if np.sum(mask) / len(mask) < 0.95:
+        # return (-1.0, -1.0, 10.0, 10.0)
+        return (np.nan, np.nan, np.nan, np.nan)
     else:
         SigmaGas = 1.36 * SigmaHI + ICO * alphaCO
-        logDM = np.log10(SigmaDust / SigmaGas / metal_z)
+        DM = SigmaDust / SigmaGas / metal_z
         logPDE = np.log10(P_DE(SigmaGas, SigmaMstar, r25_mpc))
         # metal
         if const_metal:
@@ -79,18 +80,32 @@ def mp_wrapper(func, param, SigmaHI, ICO, metal, SigmaMstar, SigmaDust, metal_z,
         else:
             if pixel_by_pixel:
                 corr_metal = w_pearsonr(
-                    logDM[mask], metal[mask], one_over_rg[mask])
+                    DM[mask], metal[mask], one_over_rg[mask])
             else:
-                corr_metal = pearsonr(logDM[mask], metal[mask])[0]
+                corr_metal = pearsonr(DM[mask], metal[mask])[0]
         # PDE
-        if pixel_by_pixel:
-            corr_pde = w_pearsonr(logDM[mask], logPDE[mask], one_over_rg[mask])
+        const_pde = (np.nanmax(logPDE) - np.nanmin(logPDE)) < 0.2
+        if const_pde:
+            corr_pde = 0.0
         else:
-            corr_pde = pearsonr(logDM[mask], logPDE[mask])[0]
-        return (corr_metal, corr_pde, 10**np.nanmax(logDM), 10**np.nanmedian(logDM))
+            if pixel_by_pixel:
+                corr_pde = w_pearsonr(
+                    DM[mask], logPDE[mask], one_over_rg[mask])
+            else:
+                corr_pde = pearsonr(DM[mask], logPDE[mask])[0]
+        # D/M > 1 percentage
+        max_dm = np.nansum(DM[mask] > 1.0) / len(DM[mask]) * 100
+        # f(H2) and radius
+        fh2 = ICO * alphaCO / SigmaGas
+        if pixel_by_pixel:
+            corr_fh2 = w_pearsonr(
+                fh2[mask], rg[mask], one_over_rg[mask])
+        else:
+            corr_fh2 = pearsonr(fh2[mask], rg[mask])[0]
+        return (corr_metal, corr_pde, max_dm, corr_fh2)
 
 
-def fitter(SigmaDust, SigmaHI, ICO, metal, SigmaMstar, one_over_rg,
+def fitter(SigmaDust, SigmaHI, ICO, metal, SigmaMstar, one_over_rg, rg,
            r25_mpc,
            func='metal_power', params=np.zeros((0, 2)),
            pixel_by_pixel=True):
@@ -136,7 +151,7 @@ def fitter(SigmaDust, SigmaHI, ICO, metal, SigmaMstar, one_over_rg,
     for q in [SigmaHI, ICO, metal, SigmaMstar]:
         assert len(q) == n
     metal_z = metal2Z(metal)
-    const_metal = np.nanmax(metal) - np.nanmin(metal) < 0.01
+    const_metal = np.nanmax(metal) - np.nanmin(metal) < 0.05
     # Sanity check: m, k
     m, k = params.shape
     assert k == len(model.get_param_description())
@@ -153,6 +168,7 @@ def fitter(SigmaDust, SigmaHI, ICO, metal, SigmaMstar, one_over_rg,
           SigmaDust,
           metal_z,
           one_over_rg,
+          rg,
           r25_mpc,
           const_metal,
           pixel_by_pixel) for idx in range(m)]
@@ -165,18 +181,20 @@ def fitter(SigmaDust, SigmaHI, ICO, metal, SigmaMstar, one_over_rg,
 
 def plotter(params, pspace_shape, param_1ds,
             ax, images1d, mode=0,
-            aco_func='metal_power'):
-    titles = [r'$\tilde{\rho}_{\rm D/M,~12+log(O/H)}$',
+            aco_func='metal_power', objname=None):
+    titles = [r'$\tilde{\rho}_{\rm f(H_2),~R_g}$',
               r'$\tilde{\rho}_{\rm D/M,~P_{DE}}$',
-              r'$\rm \tilde{max}(D/M)$',
-              r'$\rm \tilde{C}^{j}$']
-    cmaps = ['bwr_r', 'bwr_r', 'bwr', 'bwr_r']
+              'pct of D/M > 1 (%)',
+              r'$<C_\theta>$']
+    if objname is not None:
+        titles[3] = r'$<C_\theta^{' + objname + '}>$'
+    cmaps = ['bwr', 'bwr_r', 'bwr', 'bwr']
     vmaxs = [None] * 4
     vmins = [None] * 4
     if mode == 0:
         # plot one galaxy
-        vmaxs = [1.0, 1.0, 2.0, 0.0]
-        vmins = [-1.0, -1.0, 0.0, -10.0]
+        vmaxs = [1.0, 1.0, 10.0, 1.0]
+        vmins = [-1.0, -1.0, 0.0, 0.0]
     elif mode == 1:
         # plot all galaxies: score
         cmaps = ['Greys'] * 4
@@ -226,9 +244,9 @@ def plotter(params, pspace_shape, param_1ds,
         yticklabels = [-4.0, -2.0, 0.0]
         yticks = np.interp(yticklabels, param_1ds[1],
                            np.arange(len(param_1ds[1])))
-        xlabel = 'p0'  # (normalization)'
-        ylabel = 'p1'  # (slope)'
-        qlabel = {0: 'p0', 1: 'p1'}
+        xlabel = r'$p_0$'  # (normalization)'
+        ylabel = r'$p_1$'  # (slope)'
+        qlabel = {0: r'$p_0$', 1: r'$p_1$'}
         qticks = {0: xticks, 1: yticks}
         qticklabels = {0: xticklabels, 1: yticklabels}
     # elif aco_func == 'b13':
@@ -246,8 +264,8 @@ def plotter(params, pspace_shape, param_1ds,
     #     qticklabels = {0: xticklabels, 1: yticklabels}
     elif aco_func == 'b13_no_gamma':
         qtick_vals = {
-            0: [np.log10(2.9 / 4), np.log10(2.9), np.log10(2.9 * 4)],
-            1: [-1.0, -0.5, 0.0, 0.5, 1.0]}
+            0: [-0.5, 0.0, 0.5, 1.0, 1.5],
+            1: [0.0, 0.5, 1.0, 1.5]}
         qticks = {}
         qticklabels = {}
         for i in range(2):
@@ -255,8 +273,8 @@ def plotter(params, pspace_shape, param_1ds,
                                   np.arange(len(param_1ds[i])))
             qticklabels[i] = [str(round(num, 1)) for num in qtick_vals[i]]
         qlabel = {
-            0: 'q0',  # (log-scale normalization)'}
-            1: 'q1'}  # (exponential factor)',
+            0: r'$q_0$',  # (log-scale normalization)'}
+            1: r'$q_1$'}  # (exponential factor)',
         xticklabels = qticklabels[0]
         xticks = qticks[0]
         yticklabels = qticklabels[1]
@@ -265,8 +283,8 @@ def plotter(params, pspace_shape, param_1ds,
         ylabel = qlabel[1]
     elif aco_func == 'b13_3param':
         qtick_vals = {
-            0: [np.log10(2.9 / 4), np.log10(2.9), np.log10(2.9 * 4)],
-            1: [-1.0, -0.5, 0.0, 0.5, 1.0],
+            0: [-0.5, 0.0, 0.5, 1.0, 1.5],
+            1: [0.0, 0.5, 1.0, 1.5],
             2: [0.0, 0.5, 1.0]}
         qticks = {}
         qticklabels = {}
@@ -275,8 +293,8 @@ def plotter(params, pspace_shape, param_1ds,
                                   np.arange(len(param_1ds[i])))
             qticklabels[i] = [str(round(num, 1)) for num in qtick_vals[i]]
         qlabel = {
-            0: 'q0',  # (log-scale normalization)'}
-            1: 'q1',  # (exponential factor)',
+            0: r'$q_0$',  # (log-scale normalization)'}
+            1: r'$q_1$',  # (exponential factor)',
             2: r'$\gamma$'}  # (high-density correction)',
         combs = [[1, 0], [2, 0], [2, 1]]
         # shape: (p00, p01, p02)
@@ -293,8 +311,8 @@ def plotter(params, pspace_shape, param_1ds,
                                   np.arange(len(param_1ds[i])))
             qticklabels[i] = [str(round(num, 1)) for num in qtick_vals[i]]
         qlabel = {
-            0: 'p0',  # (normalization)',
-            1: 'p1',  # (slope)',
+            0: r'$p_0$',  # (normalization)',
+            1: r'$p_1$',  # (slope)',
             2: r'$\gamma$'}  # (high-density correction)'}
         combs = [[1, 0], [2, 0], [2, 1]]
         # shape: (p00, p01, p02)
@@ -309,28 +327,32 @@ def plotter(params, pspace_shape, param_1ds,
                 elif j == i:
                     sum_axis_1d = tuple([k for k in range(len(ax)) if k != i])
                     w = param_1ds[i][1] - param_1ds[i][0]
-                    ax[i, j].bar(param_1ds[i], np.nansum(
+                    ax[i, j].bar(param_1ds[i], np.nanmean(
                         image3d, axis=sum_axis_1d), color='white', edgecolor='black', width=w)
+                    # ax[i, j].bar(param_1ds[i], np.percentile(
+                    #     image3d, 16, axis=sum_axis_1d), color='white', edgecolor='black', width=w)
                     ax[i, j].set_xlim(
                         [np.min(param_1ds[i]), np.max(param_1ds[i])])
-                    ax[i, j].set_xlabel(qlabel[i], size=10)
+                    ax[i, j].set_ylim([0, 1])
+                    ax[i, j].set_xlabel(qlabel[i], size=16)
                     # ax[i, j].set_xticks(qticks[i])
                     # ax[i, j].set_xticklabels(qticklabels[i], size=9)
-                    ax[i, j].tick_params(axis='y', which='both',
-                                         left=False, right=False,
-                                         labelleft=False, labelright=False)
+                    # ax[i, j].tick_params(axis='y', which='both',
+                    #                      left=False, right=False,
+                    #                      labelleft=False, labelright=False)
                     ax[i, j].tick_params(axis='x', which='both',
                                          top=False, labeltop=False)
                     ax[i, j].tick_params(axis='x', which='minor',
                                          bottom=False)
                     ax[i, j].tick_params(
                         axis='x', which='major', direction='out')
-                    ax[i, j].set_title(qlabel[i], size=16)
+                    # ax[i, j].set_title(qlabel[i], size=20)
                 else:  # 2-d distribution
                     if len(image3d.shape) == 3:
                         sum_axis_1d = tuple(
                             [k for k in range(len(ax)) if (k != i) and (k != j)])
-                        image2d = np.nansum(image3d, axis=sum_axis_1d[0]).T
+                        image2d = np.nanmean(image3d, axis=sum_axis_1d[0]).T
+                        # image2d = np.percentile(image3d, 16, axis=sum_axis_1d[0]).T
                         im = ax[i, j].contourf(image2d,
                                                origin='lower',
                                                cmap=cmaps[i],
@@ -341,19 +363,20 @@ def plotter(params, pspace_shape, param_1ds,
                                                origin='lower',
                                                cmap=cmaps[i],
                                                vmin=0, vmax=None)
-                    ax[i, j].set_xlabel(qlabel[j], size=10)
+                    ax[i, j].set_xlabel(qlabel[j], size=16)
                     ax[i, j].set_xticks(qticks[j])
                     ax[i, j].set_xticklabels(qticklabels[j], size=9)
                     ax[i, j].set_yticks(qticks[i])
                     ax[i, j].set_yticklabels(qticklabels[i], size=9)
-                    ax[i, j].set_ylabel(qlabel[i], size=10)
+                    ax[i, j].set_ylabel(qlabel[i], size=16)
     else:
         if aco_func in {'metal_power', 'b13', 'b13_no_gamma'}:
             for i in range(len(ax)):
                 im = ax[i].contourf(images1d[i].reshape(pspace_shape).T,
                                     origin='lower',
                                     cmap=cmaps[i], vmin=vmins[i], vmax=vmaxs[i])
-                plt.colorbar(im, ax=ax[i])
+                plt.colorbar(mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(
+                    vmin=vmins[i], vmax=vmaxs[i]), cmap=cmaps[i]), ax=ax[i])
                 # xlim = ax[i].get_xlim()
                 ax[i].set_xlabel(xlabel, size=12)
                 ax[i].set_xticks(xticks)
@@ -376,9 +399,9 @@ def plotter(params, pspace_shape, param_1ds,
                             if i < 3:  # conditions
                                 image2d = np.nanmedian(
                                     image3d, axis=sum_axis[j])
-                            else:  # Overall score
-                                image2d = np.log10(np.nanmean(
-                                    10**image3d, axis=sum_axis[j]))
+                            else:  # Overall cost
+                                image2d = np.nanmean(
+                                    image3d, axis=sum_axis[j])
                         elif mode == 1:  # Overall scores
                             image2d = np.log10(np.nanmean(
                                 10**image3d, axis=sum_axis[j]))

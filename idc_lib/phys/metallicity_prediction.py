@@ -12,7 +12,8 @@ import numpy as np
 def pred_logoh_at_re(log_mstar,
                      radius_re=None,
                      p0=8.647, p1=-0.718, p2=0.682, p3=-0.133,
-                     offset=0.46, blank_re=False, blank_mstar=False):
+                     offset=0.46, blank_re=False, blank_mstar=False,
+                     fit2022jun24=False):
     """
     Predicting 12+log(O/H) from stellar mass and galacto-centric radius in
     effective radius, using the method described in Sun et al. (2020) and
@@ -67,44 +68,51 @@ def pred_logoh_at_re(log_mstar,
         radius_re = 1.0
     log_mstar = np.array(log_mstar)
     if np.any(log_mstar > 11.0):
-        warnings.warn('12+log(O/H) Prediction: log(mstar) > 11.0 found. ' +
-                      'This is not suggested by our extrapolation method.')
         if blank_mstar:
             log_mstar[log_mstar > 11.0] = np.nan
+            warnings.warn('12+log(O/H) Prediction: log(mstar) > 11.0 found. ' +
+                          'This is not suggested by our extrapolation method.')
             warnings.warn("They're blanked since blank_mstar==True")
     if np.any(log_mstar < 9.0):
-        warnings.warn('12+log(O/H) Prediction: log(mstar) < 9.0 found. ' +
-                      'This is not suggested by our extrapolation method.')
         if blank_mstar:
             log_mstar[log_mstar < 9.0] = np.nan
+            warnings.warn('12+log(O/H) Prediction: log(mstar) < 9.0 found. ' +
+                          'This is not suggested by our extrapolation method.')
             warnings.warn("They're blanked since blank_mstar==True")
     radius_re = np.array(radius_re)
     if np.any(radius_re < 0.0):
         assert False, '12+log(O/H) Prediction: radius < 0 found.'
     if np.any(radius_re > 2.0):
-        warnings.warn('12+log(O/H) Prediction: r_g/r_e > 5.0 found. ' +
-                      'This is not suggested by our extrapolation method.')
         if blank_re:
             radius_re[radius_re > 2.0] = np.nan
+            warnings.warn('12+log(O/H) Prediction: r_g/r_e > 5.0 found. ' +
+                          'This is not suggested by our extrapolation method.')
             warnings.warn("They're blanked since blank_re==True")
     if np.any(radius_re < 0.3):
-        warnings.warn('12+log(O/H) Prediction: r_g/r_e > 0.3 found. ' +
-                      'This is not suggested by our extrapolation method.')
         if blank_re:
             radius_re[radius_re < 0.3] = np.nan
+            warnings.warn('12+log(O/H) Prediction: r_g/r_e > 0.3 found. ' +
+                          'This is not suggested by our extrapolation method.')
             warnings.warn("They're blanked since blank_re==True")
     # calculate reference metallicity at 1 * Re
-    x = log_mstar - 8.0
-    ref = p0 + p1 * x + p2 * x**2 + p3 * x**3
-    # calculate extrapolation threshold
-    xp = (-2 * p2 - np.sqrt(4 * p2**2 - 12 * p1 * p3)) / 6 / p3
-    refp = p0 + p1 * xp + p2 * xp**2 + p3 * xp**3
-    mask = x > xp
-    if type(mask) is np.bool_:
-        if mask:
-            ref = refp
+    if fit2022jun24:
+        x = log_mstar - 8.0 - 3.5
+        a = 8.56  # +- 0.02
+        b = 0.010  # +- 0.002
+        ref = a + b * x * np.exp(-x)
+        offset = 0
     else:
-        ref[mask] = p0 + p1 * xp + p2 * xp**2 + p3 * xp**3
+        x = log_mstar - 8.0
+        ref = p0 + p1 * x + p2 * x**2 + p3 * x**3
+        # calculate extrapolation threshold
+        xp = (-2 * p2 - np.sqrt(4 * p2**2 - 12 * p1 * p3)) / 6 / p3
+        refp = p0 + p1 * xp + p2 * xp**2 + p3 * xp**3
+        mask = x > xp
+        if type(mask) is np.bool_:
+            if mask:
+                ref = refp
+        else:
+            ref[mask] = p0 + p1 * xp + p2 * xp**2 + p3 * xp**3
     # calculate gradient
     gradient = -0.1 * (radius_re - 1)
     #

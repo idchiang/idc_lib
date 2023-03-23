@@ -73,8 +73,9 @@ class DoublePowerLawMetallicity():
             aco_prev = aco
         if i == max_loop - 1:
             mask = diff > 0.01
-            print('WARNING: Double Metal LOOP LIMIT REACHED IN', params,
-                  ICO[mask], SigmaAtomStar[mask], metal[mask])
+            # print('WARNING: Double Metal LOOP LIMIT REACHED IN', params,
+            #       ICO[mask], SigmaAtomStar[mask], metal[mask])
+            aco[mask] = np.nan
         return aco
 
 
@@ -117,6 +118,7 @@ class DoublePowerLawMetallicityNoCut():
             aco_prev = aco
         if i == max_loop - 1:
             mask = diff > 0.01
-            print('WARNING: Double Metal LOOP LIMIT REACHED IN', params,
-                  ICO[mask], SigmaAtomStar[mask], metal[mask])
+            # print('WARNING: Double Metal LOOP LIMIT REACHED IN', params,
+            #       ICO[mask], SigmaAtomStar[mask], metal[mask])
+            aco[mask] = np.nan
         return aco
